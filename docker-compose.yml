@@ -1,0 +1,95 @@
+version: "3.9"
+
+services:
+
+  grafana:
+    # Define dependency between containers
+    depends_on: 
+      - influxdb
+    # Grafana hostname
+    hostname: grafana
+    # Build context, Dockerfile in ./grafana
+    build:
+      context: ./grafana
+
+    # Grafana will be member of front and back end
+    networks:
+    - tig-frontend
+    - tig-backend
+
+
+    # Expose port 443 to reach the web UI over HTTPS
+    ports: 
+    - "443:3000/tcp"
+    env_file:
+      - .env
+    # Grafana volumes to get persistent configuration/dashboard
+    volumes:
+      - type: volume
+        source: grafana-sqlite
+        target: /var/lib/grafana
+      - type: volume
+        source: grafana-data
+        target: /usr/share/grafana
+
+
+
+  telegraf:
+    image: telegraf:1.20.2-alpine
+    depends_on: 
+      - influxdb
+    # Define container hostname    
+    hostname: telegraf
+    # Environment variable to feed configuration files
+    env_file:
+      - .env
+
+    # Telegraf do not need front end access
+    networks:
+      - tig-backend
+
+    command: ["/usr/bin/telegraf", "--config-directory", "/etc/telegraf.conf.d"]
+
+    # Add a bind volume to get custom configuration files inside container
+    volumes:
+      - type: bind
+        source: ./telegraf.conf.d
+        target: /etc/telegraf.conf.d/
+
+
+
+  influxdb:
+    # Define hostname of the container
+    hostname: influxdb
+    # Build context, Dockerfile in ./influxdb
+    build:
+      context: ./influxdb
+
+    # Restrict influxdb container only to back end network
+    networks:
+      - tig-backend
+
+        # InfluxDB volume to get persistent data
+    volumes:
+      - type: volume
+        source: influxdb-data
+        target: /var/lib/influxdb2
+
+    ports:
+      - "8086:8086/tcp"
+
+    env_file:
+      - .env
+
+
+# Declare volumes for containers
+volumes:
+  influxdb-data:
+  grafana-sqlite:
+  grafana-data:
+
+networks:
+  tig-frontend:
+    name: tig-frontend
+  tig-backend:
+    name: tig-backend
